@@ -8,6 +8,7 @@ import random
 from tqdm import tqdm
 from torch.utils.data import Dataset
 import concurrent.futures
+from device import resolve_device
 
 
 def get_npy_shape(file_path):
@@ -63,6 +64,7 @@ def traverse_dir(
 
 
 def get_data_loaders(args, whole_audio=False):
+    cache_device = resolve_device(args.train.cache_device)
     data_train = AudioDataset(
         args.data.train_path,
         waveform_sec=args.data.duration,
@@ -72,16 +74,16 @@ def get_data_loaders(args, whole_audio=False):
         whole_audio=whole_audio,
         extensions=args.data.extensions,
         n_spk=args.model.n_spk,
-        device=args.train.cache_device,
+        device=cache_device,
         fp16=args.train.cache_fp16,
         use_aug=True)
     loader_train = torch.utils.data.DataLoader(
         data_train ,
         batch_size=args.train.batch_size if not whole_audio else 1,
         shuffle=True,
-        num_workers=args.train.num_workers if args.train.cache_device=='cpu' else 0,
-        persistent_workers=(args.train.num_workers > 0) if args.train.cache_device=='cpu' else False,
-        pin_memory=True if args.train.cache_device=='cpu' else False
+        num_workers=args.train.num_workers if cache_device == 'cpu' else 0,
+        persistent_workers=(args.train.num_workers > 0) if cache_device == 'cpu' else False,
+        pin_memory=True if cache_device == 'cpu' else False
     )
     data_valid = AudioDataset(
         args.data.valid_path,

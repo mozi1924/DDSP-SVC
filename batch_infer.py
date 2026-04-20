@@ -10,6 +10,7 @@ import pyworld as pw
 import parselmouth
 import hashlib
 from ast import literal_eval
+from device import resolve_device
 from slicer import Slicer
 from ddsp.vocoder import F0_Extractor, Volume_Extractor, Units_Encoder
 from ddsp.core import upsample
@@ -97,7 +98,7 @@ def parse_args(args=None, namespace=None):
         type=str,
         default=None,
         required=False,
-        help="cpu or cuda, auto if not set")
+        help="device: cpu, cuda, mps, or auto")
     parser.add_argument(
         "-i",
         "--input",
@@ -351,9 +352,7 @@ if __name__ == '__main__':
     cmd = parse_args()
 
     # device
-    device = cmd.device
-    if device is None:
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = resolve_device(cmd.device)
 
     extensions = cmd.extensions
 

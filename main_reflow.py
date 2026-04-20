@@ -8,6 +8,7 @@ import pyworld as pw
 import parselmouth
 import hashlib
 from ast import literal_eval
+from device import resolve_device
 from slicer import Slicer
 from ddsp.vocoder import F0_Extractor, Volume_Extractor, Units_Encoder
 from ddsp.core import upsample
@@ -42,7 +43,7 @@ def parse_args(args=None, namespace=None):
         type=str,
         default=None,
         required=False,
-        help="cpu or cuda, auto if not set")
+        help="device: cpu, cuda, mps, or auto")
     parser.add_argument(
         "-i",
         "--input",
@@ -190,9 +191,7 @@ if __name__ == '__main__':
     cmd = parse_args()
     
     #device = 'cpu' 
-    device = cmd.device
-    if device is None:
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = resolve_device(cmd.device)
     
     # load reflow model
     model, vocoder, args = load_model_vocoder(cmd.model_ckpt, device=device)
@@ -346,4 +345,3 @@ if __name__ == '__main__':
                 result = cross_fade(result, seg_output, current_length + silent_length)
             current_length = current_length + silent_length + len(seg_output)
         sf.write(cmd.output, result, args.data.sampling_rate)
-    

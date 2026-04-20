@@ -9,6 +9,7 @@ import concurrent.futures
 import torch.multiprocessing as mp
 from logger import utils
 from tqdm import tqdm
+from device import resolve_device
 from ddsp.vocoder import F0_Extractor, Volume_Extractor, Units_Encoder
 from reflow.vocoder import Vocoder
 from logger.utils import traverse_dir
@@ -29,7 +30,7 @@ def parse_args(args=None, namespace=None):
         type=str,
         default=None,
         required=False,
-        help="cpu or cuda, auto if not set")
+        help="device: cpu, cuda, mps, or auto")
     parser.add_argument(
         "-j",
         "--workers",
@@ -40,7 +41,8 @@ def parse_args(args=None, namespace=None):
     return parser.parse_args(args=args, namespace=namespace)
 
 
-def load_extractors(args, sample_rate=None, hop_size=None, device='cuda'):
+def load_extractors(args, sample_rate=None, hop_size=None, device='auto'):
+    device = resolve_device(device)
     if sample_rate is None:
         sample_rate = args.data.sampling_rate
     if hop_size is None:
@@ -200,7 +202,8 @@ def _process_file(file, path, sample_rate, hop_size, use_pitch_aug, extensions):
     return None
 
 
-def preprocess(path, args, sample_rate=None, hop_size=None, device='cuda', use_pitch_aug=False, extensions=['wav'], workers=1):
+def preprocess(path, args, sample_rate=None, hop_size=None, device='auto', use_pitch_aug=False, extensions=['wav'], workers=1):
+    device = resolve_device(device)
     # List files
     path_srcdir = os.path.join(path, 'audio')
     filelist = traverse_dir(
@@ -255,9 +258,7 @@ if __name__ == '__main__':
     # parse commands
     cmd = parse_args()
 
-    device = cmd.device
-    if device is None:
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = resolve_device(cmd.device)
 
     # load config
     args = utils.load_config(cmd.config)

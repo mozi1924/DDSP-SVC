@@ -12,7 +12,7 @@ from .utils import init_weights, get_padding
 LRELU_SLOPE = 0.1
 
 
-def load_model(model_path, device='cuda'):
+def load_model(model_path, device='cpu'):
     h = load_config(model_path)
 
     generator = Generator(h).to(device)

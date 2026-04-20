@@ -89,7 +89,7 @@ def convert_tensor_to_numpy(tensor, is_squeeze=True):
         tensor = tensor.squeeze()
     if tensor.requires_grad:
         tensor = tensor.detach()
-    if tensor.is_cuda:
+    if tensor.device.type != 'cpu':
         tensor = tensor.cpu()
     return tensor.numpy()
 

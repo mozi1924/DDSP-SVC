@@ -4,6 +4,7 @@ import torch, librosa, pickle
 import numpy as np
 from torch.nn import functional as F
 from torchaudio.transforms import Resample
+from device import clear_device_cache, resolve_device
 from ddsp.vocoder import F0_Extractor, Volume_Extractor, Units_Encoder
 from ddsp.core import upsample
 import time
@@ -42,7 +43,7 @@ class SvcDDSP:
         self.formant_shift_key = None
 
     def update_model(self, reflow_model_path):
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.device = resolve_device()
 
         # load cascaded-reflow model
         self.reflow_model, self.vocoder, self.args = load_model_vocoder(reflow_model_path, device=self.device)
@@ -193,7 +194,7 @@ class GUI:
         self.block_frame = 0
         self.crossfade_frame = 0
         self.sola_search_frame = 0
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.device = resolve_device()
         self.svc_model: SvcDDSP = SvcDDSP()
         self.fade_in_window: torch.Tensor = None  
         self.fade_out_window: torch.Tensor = None  
@@ -308,7 +309,7 @@ class GUI:
                 print("samplerate:" + str(self.config.samplerate))
                 print("prefix_pad_length:" + str(self.f_safe_prefix_pad_length))
                 print("mix_mode:" + str(self.config.spk_mix_dict))
-                print('using_cuda:' + str(torch.cuda.is_available()))
+                print('using_device:' + str(self.device))
                 self.start_vc()
             elif event == 'sampling_method':
                 self.config.sampling_method = values['sampling_method']
@@ -387,7 +388,7 @@ class GUI:
 
     def start_vc(self):
         '''开始音频转换'''
-        torch.cuda.empty_cache()
+        clear_device_cache(self.device)
         self.input_wav = np.zeros(self.input_frame, dtype='float32')
         self.sola_buffer = torch.zeros(self.crossfade_frame, device=self.device)
         self.fade_in_window = torch.sin(

@@ -11,6 +11,7 @@ from transformers import HubertModel, HubertConfig, Wav2Vec2FeatureExtractor
 from encoder.hubert.model import HubertSoft
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
 from torchaudio.transforms import Resample
+from device import resolve_device
 from .unit2control import Unit2Control
 from .core import frequency_filter, upsample, remove_above_fmax, MaskedAvgPool1d, MedianPool1d
 import time
@@ -36,7 +37,7 @@ class F0_Extractor:
                 F0_KERNEL['rmvpe'] = RMVPE('pretrain/rmvpe/model.pt', hop_length=160)
             self.rmvpe = F0_KERNEL['rmvpe']
         if f0_extractor == 'fcpe':
-            self.device_fcpe = 'cuda' if torch.cuda.is_available() else 'cpu'
+            self.device_fcpe = resolve_device()
             if 'fcpe' not in F0_KERNEL :
                 from torchfcpe import spawn_bundled_infer_model
                 F0_KERNEL['fcpe'] = spawn_bundled_infer_model(device=self.device_fcpe)
@@ -90,7 +91,7 @@ class F0_Extractor:
         # extract f0 using crepe        
         elif self.f0_extractor == 'crepe':
             if device is None:
-                device = 'cuda' if torch.cuda.is_available() else 'cpu'
+                device = resolve_device()
             resample_kernel = self.resample_kernel.to(device)
             wav16k_torch = resample_kernel(torch.FloatTensor(audio).unsqueeze(0).to(device))
             
@@ -161,13 +162,12 @@ class Volume_Extractor:
 class Units_Encoder:
     def __init__(self, encoder, encoder_ckpt, encoder_sample_rate = 16000, encoder_hop_size = 320, device = None,
                  cnhubertsoft_gate=10):
-        if device is None:
-            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        device = resolve_device(device)
         self.device = device
         
         is_loaded_encoder = False
         if encoder == 'hubertsoft':
-            self.model = Audio2HubertSoft(encoder_ckpt).to(device)
+            self.model = Audio2HubertSoft(encoder_ckpt, device=device).to(device)
             is_loaded_encoder = True
         if encoder == 'contentvec768l12':
             self.model = Audio2ContentVec768L12(encoder_ckpt, device=device)
@@ -219,12 +219,12 @@ class HubertModelWithFinalProj(HubertModel):
         
         
 class Audio2HubertSoft(torch.nn.Module):
-    def __init__(self, path, h_sample_rate = 16000, h_hop_size = 320):
+    def __init__(self, path, h_sample_rate = 16000, h_hop_size = 320, device='cpu'):
         super().__init__()
         print(' [Encoder Model] HuBERT Soft')
         self.hubert = HubertSoft()
         print(' [Loading] ' + path)
-        checkpoint = torch.load(path)
+        checkpoint = torch.load(path, map_location=device)
         consume_prefix_in_state_dict_if_present(checkpoint, "module.")
         self.hubert.load_state_dict(checkpoint)
         self.hubert.eval()
@@ -242,7 +242,7 @@ class Audio2ContentVec768L12():
         print(' [Encoder Model] Content Vec')
         print(' [Loading] ' + path)
         self.hubert = HubertModelWithFinalProj(HubertConfig())
-        checkpoint = torch.load(path)
+        checkpoint = torch.load(path, map_location=device)
         self.hubert.load_state_dict(checkpoint)
         self.hubert = self.hubert.to(self.device)
         self.hubert.eval()
@@ -260,7 +260,7 @@ class Audio2ContentVec768L12TTA2X():
         print(' [Encoder Model] Content Vec')
         print(' [Loading] ' + path)
         self.hubert = HubertModelWithFinalProj(HubertConfig())
-        checkpoint = torch.load(path)
+        checkpoint = torch.load(path, map_location=device)
         self.hubert.load_state_dict(checkpoint)
         self.hubert = self.hubert.to(self.device)
         self.hubert.eval()

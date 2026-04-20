@@ -36,7 +36,7 @@ class RSSLoss(nn.Module):
     Random-scale Spectral Loss.
     '''
     
-    def __init__(self, fft_min, fft_max, n_scale, alpha=1.0, overlap=0, eps=1e-7, device='cuda'):
+    def __init__(self, fft_min, fft_max, n_scale, alpha=1.0, overlap=0, eps=1e-7, device='cpu'):
         super().__init__()
         self.fft_min = fft_min
         self.fft_max = fft_max

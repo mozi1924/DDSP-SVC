@@ -7,6 +7,7 @@ import numpy as np
 from nsf_hifigan.nvSTFT import STFT
 from nsf_hifigan.models import load_model,load_config
 from torchaudio.transforms import Resample
+from device import resolve_device
 from .reflow import RectifiedFlow
 from .lynxnet2 import LYNXNet2
 from ddsp.vocoder import CombSubSuperFast
@@ -61,8 +62,7 @@ def load_model_vocoder(
 
 class Vocoder:
     def __init__(self, vocoder_type, vocoder_ckpt, device = None):
-        if device is None:
-            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        device = resolve_device(device)
         self.device = device
         
         if vocoder_type == 'nsf-hifigan':
@@ -101,8 +101,7 @@ class Vocoder:
 class NsfHifiGAN(torch.nn.Module):
     def __init__(self, model_path, device=None):
         super().__init__()
-        if device is None:
-            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        device = resolve_device(device)
         self.device = device
         self.model_path = model_path
         self.model = None

@@ -3,11 +3,17 @@ import time
 import numpy as np
 import torch
 import librosa
+from contextlib import nullcontext
 from logger.saver import Saver
 from logger import utils
 from torch import autocast
-from torch.cuda.amp import GradScaler
+from device import get_device_type
 from nsf_hifigan.nvSTFT import STFT
+
+try:
+    from torch.amp import GradScaler
+except (ImportError, AttributeError):
+    from torch.cuda.amp import GradScaler
 
 def calculate_mel_snr(gt_mel, pred_mel):
     # 计算误差图像
@@ -203,7 +209,7 @@ def train(args, initial_global_step, model, optimizer, scheduler, vocoder, loade
     start_epoch = initial_global_step // num_batches
     model.train()
     saver.log_info('======= start training =======')
-    scaler = GradScaler()
+    device_type = get_device_type(args.device)
     if args.train.amp_dtype == 'fp32':
         dtype = torch.float32
     elif args.train.amp_dtype == 'fp16':
@@ -212,6 +218,20 @@ def train(args, initial_global_step, model, optimizer, scheduler, vocoder, loade
         dtype = torch.bfloat16
     else:
         raise ValueError(' [x] Unknown amp_dtype: ' + args.train.amp_dtype)
+
+    use_amp = device_type == 'cuda' and dtype != torch.float32
+    if dtype != torch.float32 and not use_amp:
+        saver.log_info(f' [*] AMP dtype {args.train.amp_dtype} requested on {device_type}; falling back to fp32 training.')
+        dtype = torch.float32
+
+    if use_amp:
+        try:
+            scaler = GradScaler(device_type, enabled=True)
+        except TypeError:
+            scaler = GradScaler(enabled=True)
+    else:
+        scaler = None
+
     for epoch in range(start_epoch, args.train.epochs):
         for batch_idx, data in enumerate(loader_train):
             saver.global_step_increment()
@@ -223,13 +243,18 @@ def train(args, initial_global_step, model, optimizer, scheduler, vocoder, loade
                     data[k] = data[k].to(args.device)
             
             # forward
-            if dtype == torch.float32:
-                ddsp_loss, reflow_loss = model(data['units'].float(), data['f0'], data['volume'], data['spk_id'], 
-                                aug_shift=data['aug_shift'], vocoder=vocoder, gt_spec=data['mel'].float(), infer=False, t_start=args.model.t_start)
-            else:
-                with autocast(device_type=args.device, dtype=dtype):
-                    ddsp_loss, reflow_loss=model(data['units'], data['f0'], data['volume'], data['spk_id'], 
-                                    aug_shift=data['aug_shift'], vocoder=vocoder, gt_spec=data['mel'].float(), infer=False, t_start=args.model.t_start)
+            autocast_context = autocast(device_type=device_type, dtype=dtype) if use_amp else nullcontext()
+            with autocast_context:
+                ddsp_loss, reflow_loss = model(
+                    data['units'].float() if not use_amp else data['units'],
+                    data['f0'],
+                    data['volume'],
+                    data['spk_id'],
+                    aug_shift=data['aug_shift'],
+                    vocoder=vocoder,
+                    gt_spec=data['mel'].float(),
+                    infer=False,
+                    t_start=args.model.t_start)
             
             # handle nan loss
             if torch.isnan(ddsp_loss):
@@ -243,7 +268,7 @@ def train(args, initial_global_step, model, optimizer, scheduler, vocoder, loade
             else:
                 loss = args.train.lambda_ddsp * ddsp_loss + reflow_loss
                 # backpropagate
-                if dtype == torch.float32:
+                if not use_amp:
                     loss.backward()
                     optimizer.step()
                 else:

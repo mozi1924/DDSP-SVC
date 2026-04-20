@@ -2,6 +2,7 @@ import os
 import argparse
 import torch
 from torch.optim import lr_scheduler
+from device import get_device_type, resolve_device
 from optimizer.muon import Muon_AdamW
 from logger import utils
 from reflow.data_loaders import get_data_loaders
@@ -26,8 +27,12 @@ if __name__ == '__main__':
     
     # load config
     args = utils.load_config(cmd.config)
+    args.device = resolve_device(args.device)
+    if hasattr(args.train, 'cache_device'):
+        args.train.cache_device = resolve_device(args.train.cache_device)
     print(' > config:', cmd.config)
     print(' >    exp:', args.env.expdir)
+    print(' > device:', args.device)
     
     # load vocoder
     vocoder = Vocoder(args.vocoder.type, args.vocoder.ckpt, device=args.device)
@@ -54,7 +59,7 @@ if __name__ == '__main__':
         raise ValueError(f" [x] Unknown Model: {args.model.type}")
     
     # device
-    if args.device == 'cuda':
+    if get_device_type(args.device) == 'cuda':
         torch.cuda.set_device(args.env.gpu_id)
     model.to(args.device)
     

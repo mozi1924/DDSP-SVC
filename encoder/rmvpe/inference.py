@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torchaudio.transforms import Resample
+from device import resolve_device
 from .constants import *
 from .model import E2E0, E2E
 from .spec import MelSpectrogram 
@@ -11,7 +12,7 @@ class RMVPE:
     def __init__(self, model_path, hop_length=160):
         self.resample_kernel = {}
         model = E2E0(4, 1, (2, 2))
-        ckpt = torch.load(model_path)
+        ckpt = torch.load(model_path, map_location='cpu')
         model.load_state_dict(ckpt['model'], strict=False)
         model.eval()
         self.model = model
@@ -36,7 +37,7 @@ class RMVPE:
 
     def infer_from_audio(self, audio, sample_rate=16000, device=None, thred=0.03, use_viterbi=False):
         if device is None:
-            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            device = resolve_device()
         audio = torch.from_numpy(audio).float().unsqueeze(0).to(device)
         if sample_rate == 16000:
             audio_res = audio
